@@ -2,7 +2,7 @@
 // SERVICE WORKER — Gestor de Asuntos Propios
 // ================================================
 // DEBE COINCIDIR con APP_VERSION en index.html
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '2.12.0';
 const CACHE_NAME = 'gestor-permisos-v' + APP_VERSION.replace(/\./g, '-');
 
 // Recursos a pre-cachear durante la instalación

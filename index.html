@@ -1368,6 +1368,64 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Acordeón 3: Días No Lectivos (exportación) -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseStatsThree" aria-expanded="false" aria-controls="collapseStatsThree">
+                            <div class="d-flex align-items-center gap-2 w-100">
+                                <i data-lucide="calendar-off"></i>
+                                <span class="fw-bold">Días No Lectivos</span>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapseStatsThree" class="accordion-collapse collapse" data-bs-parent="#accordionStats">
+                        <div class="accordion-body p-0">
+                            <div class="card bg-white shadow-sm border-0">
+                                <div class="card-body p-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                        <h2 class="h5 text-blue-800 fw-bold d-flex align-items-center gap-2 mb-0"><i data-lucide="calendar-off"></i> Exportar Días No Lectivos</h2>
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <select id="nt-export-filter" class="form-select form-select-sm w-auto" onchange="window.app.renderNtExportList()">
+                                                <option value="all">Todas las categorías</option>
+                                                <option value="holidays">Festivos</option>
+                                                <option value="nonTeachingNotifiedDays">No Lectivos Comunicados</option>
+                                                <option value="freeDispositionDays">Libre Disposición</option>
+                                                <option value="unavailableDays">No Disponibles</option>
+                                                <option value="vacationPeriods">Períodos Vacacionales</option>
+                                                <option value="nonTeachingRanges">Laborables No Lectivos</option>
+                                            </select>
+                                            <button onclick="window.app.ntSelectAll(true)" class="btn btn-outline-primary btn-sm">Seleccionar todos</button>
+                                            <button onclick="window.app.ntSelectAll(false)" class="btn btn-outline-secondary btn-sm">Quitar selección</button>
+                                            <button onclick="window.app.exportNonTeachingDays('pdf')" class="btn btn-danger btn-sm d-flex align-items-center gap-2"><i data-lucide="file-text" style="width:16px"></i> PDF</button>
+                                            <button onclick="window.app.exportNonTeachingDays('excel')" class="btn btn-success btn-sm d-flex align-items-center gap-2"><i data-lucide="file-spreadsheet" style="width:16px"></i> Excel</button>
+                                            <button onclick="window.app.exportNonTeachingDays('csv')" class="btn btn-success btn-sm d-flex align-items-center gap-2"><i data-lucide="sheet" style="width:16px"></i> CSV</button>
+                                            <button onclick="window.app.exportNonTeachingDays('json')" class="btn btn-dark btn-sm d-flex align-items-center gap-2"><i data-lucide="braces" style="width:16px"></i> JSON</button>
+                                        </div>
+                                    </div>
+                                    <p class="small text-muted mb-2">Exporta los días no lectivos introducidos en el calendario del curso. Marca los días que quieras incluir (o usa "Seleccionar todos") y pulsa PDF, Excel, CSV o JSON.</p>
+                                    <div class="d-flex justify-content-between align-items-center mb-2 small text-secondary">
+                                        <span>Días encontrados: <span id="nt-export-total" class="fw-bold">0</span></span>
+                                        <span>Seleccionados: <span id="nt-export-count" class="fw-bold text-primary">0</span></span>
+                                    </div>
+                                    <div class="table-responsive border rounded" style="max-height: 420px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="bg-blue-50 text-blue-800 small" style="position: sticky; top: 0; background: #fff; z-index: 1;">
+                                                <tr>
+                                                    <th class="p-2 text-center" style="width:40px;"></th>
+                                                    <th class="p-2">Fecha</th>
+                                                    <th class="p-2">Categoría(s)</th>
+                                                    <th class="p-2">Detalle</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="nt-export-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1662,7 +1720,7 @@
 <!-- PWA: Service Worker Registration -->
 <script>
     // Control de versiones - DEBE COINCIDIR con sw.js
-    const APP_VERSION = '2.11.0';
+    const APP_VERSION = '2.12.0';
     let newServiceWorker = null;
     let registrationInstance = null;
     let isUpdating = false;
@@ -5091,6 +5149,169 @@
         };
 
         // ================================================
+        // EXPORTAR DÍAS NO LECTIVOS
+        // ================================================
+        function ntToISO(d) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        }
+
+        // Reúne todos los días no lectivos del calendario del curso,
+        // expandiendo los tramos (vacacionales y laborables no lectivos).
+        window.app.getNonTeachingDaysData = () => {
+            const cfg = window.app.config || {};
+            const byDate = {};
+            const addDay = (date, catLabel, detail) => {
+                if (!date) return;
+                if (!byDate[date]) byDate[date] = { date, cats: [], details: [] };
+                if (!byDate[date].cats.includes(catLabel)) byDate[date].cats.push(catLabel);
+                if (detail && !byDate[date].details.includes(detail)) byDate[date].details.push(detail);
+            };
+            (cfg.holidays || []).forEach(d => addDay(d, 'Festivo', ''));
+            (cfg.nonTeachingNotifiedDays || []).forEach(d => addDay(d, 'No Lectivo Comunicado', ''));
+            (cfg.freeDispositionDays || []).forEach(d => addDay(d, 'Libre Disposición', ''));
+            (cfg.unavailableDays || []).forEach(d => addDay(d, 'No Disponible (trabajo en el centro)', ''));
+            (cfg.vacationPeriods || []).forEach(p => {
+                if (!p.start || !p.end) return;
+                const end = new Date(p.end + 'T12:00:00');
+                for (let d = new Date(p.start + 'T12:00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+                    addDay(ntToISO(d), 'Período Vacacional', p.label || '');
+                }
+            });
+            (cfg.nonTeachingRanges || []).forEach(r => {
+                if (!r.start || !r.end) return;
+                const end = new Date(r.end + 'T12:00:00');
+                for (let d = new Date(r.start + 'T12:00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+                    addDay(ntToISO(d), 'Laborable No Lectivo', r.label || '');
+                }
+            });
+            return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+        };
+
+        window.app.renderNtExportList = () => {
+            const tb = document.getElementById('nt-export-body');
+            if (!tb) return;
+            const filter = document.getElementById('nt-export-filter')?.value || 'all';
+            const data = window.app.getNonTeachingDaysData().filter(d => filter === 'all' || d.cats.some(c => {
+                const map = { 'Festivo': 'holidays', 'No Lectivo Comunicado': 'nonTeachingNotifiedDays', 'Libre Disposición': 'freeDispositionDays', 'No Disponible (trabajo en el centro)': 'unavailableDays', 'Período Vacacional': 'vacationPeriods', 'Laborable No Lectivo': 'nonTeachingRanges' };
+                return map[c] === filter;
+            }));
+            const totalEl = document.getElementById('nt-export-total');
+            if (totalEl) totalEl.innerText = data.length;
+            tb.innerHTML = '';
+            if (data.length === 0) {
+                tb.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-muted">No hay días no lectivos registrados en esta categoría.</td></tr>';
+            } else {
+                data.forEach(d => {
+                    const dateObj = new Date(d.date + 'T12:00:00');
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="text-center align-middle"><input type="checkbox" class="form-check-input nt-day-check" data-date="${d.date}" onchange="window.app.ntUpdateCount()"></td>
+                        <td class="align-middle">${dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</td>
+                        <td class="align-middle">${d.cats.map(c => `<span class="badge bg-secondary-subtle text-secondary-emphasis me-1">${c}</span>`).join('')}</td>
+                        <td class="align-middle small text-secondary">${d.details.filter(Boolean).join(', ') || '-'}</td>`;
+                    tb.appendChild(tr);
+                });
+            }
+            window.app.ntUpdateCount();
+        };
+
+        window.app.ntSelectAll = (checked) => {
+            document.querySelectorAll('#nt-export-body .nt-day-check').forEach(cb => { cb.checked = checked; });
+            window.app.ntUpdateCount();
+        };
+
+        window.app.ntUpdateCount = () => {
+            const el = document.getElementById('nt-export-count');
+            if (el) el.innerText = document.querySelectorAll('#nt-export-body .nt-day-check:checked').length;
+        };
+
+        window.app.exportNonTeachingDays = (format) => {
+            try {
+                const selected = [...document.querySelectorAll('#nt-export-body .nt-day-check:checked')].map(cb => cb.dataset.date).sort();
+                if (selected.length === 0) return alert('Selecciona al menos un día para exportar.');
+                const all = window.app.getNonTeachingDaysData();
+                const rows = selected.map(date => {
+                    const d = all.find(x => x.date === date);
+                    const dateObj = new Date(date + 'T12:00:00');
+                    return {
+                        fecha: dateObj.toLocaleDateString('es-ES'),
+                        dia: dateObj.toLocaleDateString('es-ES', { weekday: 'long' }),
+                        cats: d ? d.cats.join(', ') : '',
+                        detalle: d ? (d.details.filter(Boolean).join(', ') || '') : ''
+                    };
+                });
+                const curso = `${window.app.config.startYear}/${window.app.config.startYear + 1}`;
+
+                if (format === 'csv') {
+                    const sep = ';';
+                    const lines = [`Días No Lectivos - Curso ${curso}`, `Exportado: ${new Date().toLocaleString('es-ES')}`, `Días exportados: ${rows.length}`, ''];
+                    lines.push(['Fecha', 'Día', 'Categoría(s)', 'Detalle'].join(sep));
+                    rows.forEach(r => lines.push([r.fecha, r.dia, r.cats, r.detalle].map(v => `"${String(v).replace(/"/g, '""')}"`).join(sep)));
+                    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `GestorPermisos_DiasNoLectivos_${getTimestamp()}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                } else if (format === 'excel') {
+                    if (typeof XLSX === 'undefined') throw new Error('Librería Excel no disponible (sin conexión)');
+                    const wsData = [
+                        [`Días No Lectivos - Curso ${curso}`],
+                        [`Exportado: ${new Date().toLocaleString('es-ES')}`],
+                        [`Días exportados: ${rows.length}`],
+                        [],
+                        ['Fecha', 'Día', 'Categoría(s)', 'Detalle'],
+                        ...rows.map(r => [r.fecha, r.dia, r.cats, r.detalle])
+                    ];
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }, { wch: 40 }];
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Días No Lectivos');
+                    XLSX.writeFile(wb, `GestorPermisos_DiasNoLectivos_${getTimestamp()}.xlsx`);
+                } else if (format === 'json') {
+                    const payload = {
+                        app: 'Gestión de Asuntos Propios',
+                        tipo: 'diasNoLectivos',
+                        curso: curso,
+                        fechaExportacion: new Date().toISOString(),
+                        total: rows.length,
+                        dias: selected.map((date, i) => ({
+                            fecha: date,
+                            diaSemana: rows[i].dia,
+                            categorias: rows[i].cats.split(', ').filter(Boolean),
+                            detalle: rows[i].detalle
+                        }))
+                    };
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `GestorPermisos_DiasNoLectivos_${getTimestamp()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                } else {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    doc.setFontSize(14);
+                    doc.text(`Días No Lectivos - Curso ${curso}`, 14, 15);
+                    doc.setFontSize(9);
+                    doc.text(`Exportado: ${new Date().toLocaleString('es-ES')}  |  Días exportados: ${rows.length}`, 14, 22);
+                    doc.autoTable({
+                        startY: 28,
+                        head: [['Fecha', 'Día', 'Categoría(s)', 'Detalle']],
+                        body: rows.map(r => [r.fecha, r.dia, r.cats, r.detalle]),
+                        theme: 'striped', headStyles: { fillColor: [37, 99, 235] },
+                        columnStyles: { 3: { cellWidth: 45 } }
+                    });
+                    doc.save(`GestorPermisos_DiasNoLectivos_${getTimestamp()}.pdf`);
+                }
+                showNotification(`Exportación completada (${rows.length} días)`);
+            } catch (e) {
+                showNotification('Error al exportar: ' + e.message, 'error');
+            }
+        };
+
+        // ================================================
         // EXPORTAR PDF
         // ================================================
         window.app.exportPDF = (type) => {
@@ -5142,6 +5363,7 @@
         // ================================================
         // INICIO
         // ================================================
+        document.getElementById('collapseStatsThree')?.addEventListener('shown.bs.collapse', () => window.app.renderNtExportList());
         init();
     </script>
 </body>
